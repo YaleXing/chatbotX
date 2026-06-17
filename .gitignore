@@ -10,6 +10,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Claude Code 配置（包含敏感信息）
+.claude/
+
 # 敏感配置文件
 .env
 config/config.yaml
