@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from utils.logger import logger
+
 
 def get_current_time() -> str:
     """获取当前时间字符串"""
@@ -48,7 +50,10 @@ def is_image_message(message: str) -> bool:
         是否是图片消息
     """
     # 检查 CQ 码中的图片格式
-    return "[CQ:image," in message
+    is_image = "[CQ:image," in message
+    if is_image:
+        logger.info(f"检测到图片消息: {message[:100]}...")
+    return is_image
 
 
 def extract_image_url(message: str) -> Optional[str]:
@@ -61,12 +66,15 @@ def extract_image_url(message: str) -> Optional[str]:
     Returns:
         图片 URL，如果没有则返回 None
     """
-    # 匹配 CQ 码中的 URL
+    # 匹配 CQ 码中的 URL（优先）
     pattern = r'\[CQ:image,[^\]]*url=([^\],]+)'
     match = re.search(pattern, message)
 
     if match:
-        return match.group(1)
+        url = match.group(1)
+        # 确保是 HTTP URL
+        if url.startswith("http"):
+            return url
 
     # 尝试匹配 file 字段
     pattern = r'\[CQ:image,[^\]]*file=([^\],]+)'
@@ -74,8 +82,20 @@ def extract_image_url(message: str) -> Optional[str]:
 
     if match:
         file = match.group(1)
+        # 如果是 HTTP URL，直接返回
         if file.startswith("http"):
             return file
+        # 如果是 base64 数据，需要转换
+        if file.startswith("base64://"):
+            # 需要下载 base64 数据并转换为 URL
+            # 这里暂时返回 None，后续可以添加支持
+            logger.warning("收到 base64 图片，暂不支持识别")
+            return None
+        # 如果是本地文件路径，需要下载
+        if file.startswith("file:///") or not file.startswith("http"):
+            logger.warning(f"收到本地图片文件: {file}")
+            # 需要从 NapCat 下载图片
+            return None
 
     return None
 

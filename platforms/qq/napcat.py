@@ -300,6 +300,16 @@ class NapCatPlatform(BasePlatform):
             if user_id == self.owner_qq:
                 return
 
+            # 群聊消息处理：只回复 @ 自己的消息
+            if message_type == "group":
+                # 检查是否 @ 了机器人
+                if not self._is_at_bot(raw_message):
+                    logger.debug(f"群消息未 @ 机器人，忽略: {raw_message[:30]}...")
+                    return
+                logger.info(f"收到群 @ 消息: {raw_message[:50]}...")
+            else:
+                logger.info(f"收到私聊消息: {raw_message[:50]}...")
+
             # 构建平台消息
             platform_msg = PlatformMessage(
                 user_id=user_id,
@@ -310,11 +320,22 @@ class NapCatPlatform(BasePlatform):
                 sender_name=msg_data.get("sender", {}).get("nickname", "")
             )
 
-            logger.info(f"收到消息: {raw_message[:50]}...")
-
             # 调用回调
             if self.message_callback:
                 await self.message_callback(platform_msg)
 
         except Exception as e:
             logger.error(f"处理消息失败: {e}")
+
+    def _is_at_bot(self, message: str) -> bool:
+        """
+        检查消息是否 @ 了机器人
+
+        Args:
+            message: 消息内容
+
+        Returns:
+            是否 @ 了机器人
+        """
+        # OneBot 11 @ 格式: [CQ:at,qq=机器人QQ号]
+        return f"[CQ:at,qq={self.owner_qq}]" in message
