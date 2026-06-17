@@ -15,11 +15,24 @@ venv.bak/
 
 # 敏感配置文件
 .env
+.env.local
+.env.*.local
 config/config.yaml
+config/secrets.yaml
+secrets.json
+credentials.json
+
+# API Key 和 Token 文件
+*.key
+*.pem
+*.p12
+*.pfx
 
 # 数据文件
 data/
 *.log
+*.db
+*.sqlite
 
 # IDE
 .vscode/
@@ -34,3 +47,4 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+temp/
