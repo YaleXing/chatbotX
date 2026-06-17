@@ -1,0 +1,63 @@
+# QQ 聊天机器人配置示例
+# 复制此文件为 config.yaml 并填入真实配置
+
+# AI 配置
+ai:
+  provider: "mimo"
+  model: "mimo-v2.5"
+  api_key: "your-api-key-here"  # 从 .env 文件读取
+  base_url: "https://api.xiaomimimo.com/v1"
+  max_context: 100  # 保留最近 100 轮对话
+  temperature: 0.7
+  max_tokens: 2048
+
+  # 语音模型配置
+  asr_model: "mimo-v2.5-asr"  # 语音识别模型
+  tts_model: "mimo-v2.5-tts"  # 语音合成模型
+
+# QQ 配置
+qq:
+  platform: "napcat"
+  api_url: "http://localhost:3000"
+  access_token: "your-access-token-here"  # 从 .env 文件读取
+  owner_qq: "your-qq-number-here"  # 从 .env 文件读取
+
+# 人格配置
+personality:
+  default: "cute"
+  available:
+    cute: "活泼可爱"
+    cool: "高冷话少"
+    funny: "搞笑幽默"
+    gentle: "温柔体贴"
+
+# 表情包配置
+emoji:
+  enabled: true
+  directory: "resources/emojis"
+  max_per_message: 1
+  probability: 0.3  # 30% 概率发表情
+
+# 语音配置
+voice:
+  enabled: true
+  recognize: true  # 启用语音识别
+  synthesize: false  # 禁用语音合成（暂时）
+  probability: 0.2  # 20% 概率用语音回复
+
+# 安全配置
+security:
+  owner_only_commands:
+    - "重启"
+    - "切换模型"
+    - "切换人格"
+    - "查看日志"
+    - "关闭机器人"
+    - "清空历史"
+    - "查看状态"
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: "data/bot.log"
+  rotation: "10 MB"
