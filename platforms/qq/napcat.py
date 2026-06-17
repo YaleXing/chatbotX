@@ -27,6 +27,7 @@ class NapCatPlatform(BasePlatform):
                 - access_token: HTTP 服务的 Access Token
                 - ws_token: WebSocket 服务的 Access Token（可选）
                 - owner_qq: 主人 QQ 号
+                - bot_qq: 机器人 QQ 号（可选，如果不填会自动获取）
         """
         super().__init__(config)
 
@@ -34,6 +35,7 @@ class NapCatPlatform(BasePlatform):
         self.access_token = config.get("access_token", "")
         self.ws_token = config.get("ws_token", "")  # WebSocket 专用 token
         self.owner_qq = config.get("owner_qq", "")
+        self.bot_qq = config.get("bot_qq", "")  # 机器人自己的 QQ 号
 
         # HTTP 会话（用于发送消息）
         self.session: Optional[aiohttp.ClientSession] = None
@@ -215,7 +217,15 @@ class NapCatPlatform(BasePlatform):
                 raise Exception(f"连接失败: {result}")
 
             data = result.get("data", {})
-            logger.info(f"登录成功: {data.get('nickname')} ({data.get('user_id')})")
+            bot_qq = str(data.get('user_id', ''))
+            nickname = data.get('nickname', '')
+
+            # 自动获取机器人 QQ 号
+            if not self.bot_qq and bot_qq:
+                self.bot_qq = bot_qq
+                logger.info(f"自动获取机器人 QQ 号: {self.bot_qq}")
+
+            logger.info(f"登录成功: {nickname} ({bot_qq})")
 
     async def _connect_websocket(self):
         """连接 WebSocket"""
@@ -296,14 +306,16 @@ class NapCatPlatform(BasePlatform):
             message_type = msg_data.get("message_type", "private")
             raw_message = msg_data.get("raw_message", "")
 
-            # 忽略自己的消息
-            if user_id == self.owner_qq:
+            # 忽略机器人自己的消息（避免回复自己）
+            if user_id == self.bot_qq:
                 return
 
             # 群聊消息处理：只回复 @ 自己的消息
             if message_type == "group":
                 # 检查是否 @ 了机器人
-                if not self._is_at_bot(raw_message):
+                is_at = self._is_at_bot(raw_message)
+                logger.info(f"群消息 @ 检测: {is_at}, 消息: {raw_message[:50]}...")
+                if not is_at:
                     logger.debug(f"群消息未 @ 机器人，忽略: {raw_message[:30]}...")
                     return
                 logger.info(f"收到群 @ 消息: {raw_message[:50]}...")
@@ -338,4 +350,16 @@ class NapCatPlatform(BasePlatform):
             是否 @ 了机器人
         """
         # OneBot 11 @ 格式: [CQ:at,qq=机器人QQ号]
-        return f"[CQ:at,qq={self.owner_qq}]" in message
+        # 如果没有机器人 QQ 号，尝试从消息中提取
+        if not self.bot_qq:
+            # 从消息中提取 @ 的 QQ 号
+            import re
+            match = re.search(r'\[CQ:at,qq=(\d+)\]', message)
+            if match:
+                # 如果 @ 的不是主人，可能是机器人自己
+                # 但这样不够准确，最好还是配置机器人 QQ 号
+                logger.warning("未配置机器人 QQ 号，无法确定是否 @ 了机器人")
+                return False
+            return False
+
+        return f"[CQ:at,qq={self.bot_qq}]" in message
