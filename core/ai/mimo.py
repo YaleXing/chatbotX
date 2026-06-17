@@ -173,6 +173,8 @@ class MiMoAI(BaseAI):
         Returns:
             AI 回复
         """
+        logger.info(f"调用 MiMo API，模型: {self.model}")
+
         payload = {
             "model": self.model,
             "messages": messages,
@@ -180,15 +182,22 @@ class MiMoAI(BaseAI):
             "max_tokens": self.max_tokens
         }
 
+        logger.info(f"发送请求到: {self.base_url}/chat/completions")
+
         response = await self.client.post(
             "/chat/completions",
             json=payload
         )
 
+        logger.info(f"收到响应，状态码: {response.status_code}")
+
         response.raise_for_status()
         data = response.json()
 
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        logger.info(f"API 返回内容长度: {len(content)}")
+
+        return content
 
     async def set_personality(self, personality_name: str) -> bool:
         """

@@ -23,13 +23,16 @@ class NapCatPlatform(BasePlatform):
         Args:
             config: 配置字典，包含：
                 - api_url: NapCat API 地址
-                - access_token: Access Token
+                - ws_url: WebSocket 地址（可选）
+                - access_token: HTTP 服务的 Access Token
+                - ws_token: WebSocket 服务的 Access Token（可选）
                 - owner_qq: 主人 QQ 号
         """
         super().__init__(config)
 
         self.api_url = config.get("api_url", "http://localhost:3000")
         self.access_token = config.get("access_token", "")
+        self.ws_token = config.get("ws_token", "")  # WebSocket 专用 token
         self.owner_qq = config.get("owner_qq", "")
 
         # HTTP 会话（用于发送消息）
@@ -40,8 +43,13 @@ class NapCatPlatform(BasePlatform):
         self._ws_task: Optional[asyncio.Task] = None
         self._running = False
 
-        # 将 HTTP URL 转换为 WebSocket URL
-        self.ws_url = self.api_url.replace("http://", "ws://").replace("https://", "wss://")
+        # WebSocket URL：优先使用配置的 ws_url，否则从 api_url 转换
+        self.ws_url = config.get("ws_url", "")
+        if not self.ws_url:
+            # 从 HTTP URL 转换为 WebSocket URL
+            self.ws_url = self.api_url.replace("http://", "ws://").replace("https://", "wss://")
+
+        # 确保以 /ws 结尾
         if not self.ws_url.endswith("/ws"):
             self.ws_url = f"{self.ws_url}/ws"
 
@@ -216,9 +224,11 @@ class NapCatPlatform(BasePlatform):
         while self._running:
             try:
                 # 构建 WebSocket 连接 headers
+                # 优先使用 ws_token，如果没有则使用 access_token
                 ws_headers = {}
-                if self.access_token:
-                    ws_headers["Authorization"] = f"Bearer {self.access_token}"
+                token = self.ws_token or self.access_token
+                if token:
+                    ws_headers["Authorization"] = f"Bearer {token}"
 
                 async with aiohttp.ClientSession() as session:
                     async with session.ws_connect(

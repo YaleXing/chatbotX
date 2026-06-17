@@ -255,8 +255,12 @@ class MessageHandler:
         Returns:
             回复消息
         """
+        logger.info(f"开始调用 AI 处理文本消息...")
+
         # 调用 AI 生成回复
         response = await self.ai.chat(message.user_id, message.content)
+
+        logger.info(f"AI 回复: {response[:50] if response else 'None'}...")
 
         # 检查回复中是否包含代码
         code_blocks = extract_code_blocks(response)

@@ -178,6 +178,8 @@ class ChatBot:
             platform_msg: 平台消息
         """
         try:
+            logger.info(f"开始处理消息: {platform_msg.content[:50]}...")
+
             # 检查是否是命令
             if is_command(platform_msg.content):
                 command, args = parse_command(platform_msg.content)
@@ -223,14 +225,20 @@ class ChatBot:
                 sender_name=platform_msg.sender_name
             )
 
+            logger.info(f"转换消息格式完成，开始调用 AI...")
+
             # 处理消息
             outgoing_msg = await self.handler.handle(incoming_msg)
+
+            logger.info(f"AI 回复完成: {outgoing_msg.content[:50] if outgoing_msg.content else '无内容'}...")
 
             # 发送回复
             await self._send_reply(platform_msg, outgoing_msg)
 
+            logger.info(f"回复发送完成")
+
         except Exception as e:
-            logger.error(f"处理消息失败: {e}")
+            logger.error(f"处理消息失败: {e}", exc_info=True)
 
     async def _send_reply(self, platform_msg: PlatformMessage, reply: OutgoingMessage | str):
         """
