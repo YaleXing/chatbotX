@@ -72,9 +72,12 @@ def extract_image_url(message: str) -> Optional[str]:
 
     if match:
         url = match.group(1)
+        logger.info(f"提取到图片 URL: {url[:100]}...")
         # 确保是 HTTP URL
         if url.startswith("http"):
             return url
+        else:
+            logger.warning(f"图片 URL 不是 HTTP 格式: {url[:50]}...")
 
     # 尝试匹配 file 字段
     pattern = r'\[CQ:image,[^\]]*file=([^\],]+)'

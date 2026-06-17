@@ -146,11 +146,16 @@ class MessageHandler:
         Returns:
             回复消息
         """
+        logger.info(f"开始处理图片消息: {message.content[:100]}...")
+
         # 提取图片 URL
         image_url = extract_image_url(message.content)
 
         if not image_url:
+            logger.warning("无法提取图片 URL")
             return OutgoingMessage(content="图片加载失败了~ (｡•́︿•̀｡)")
+
+        logger.info(f"提取到图片 URL: {image_url[:100]}...")
 
         # 调用 AI 识别图片
         prompt = "请描述一下这张图片的内容，并做出有趣的回复~"

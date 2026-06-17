@@ -183,6 +183,7 @@ class MiMoAI(BaseAI):
         }
 
         logger.info(f"发送请求到: {self.base_url}/chat/completions")
+        logger.debug(f"请求体: {str(payload)[:500]}...")
 
         response = await self.client.post(
             "/chat/completions",
@@ -191,7 +192,10 @@ class MiMoAI(BaseAI):
 
         logger.info(f"收到响应，状态码: {response.status_code}")
 
-        response.raise_for_status()
+        if response.status_code != 200:
+            logger.error(f"API 错误: {response.text}")
+            response.raise_for_status()
+
         data = response.json()
 
         content = data["choices"][0]["message"]["content"]
