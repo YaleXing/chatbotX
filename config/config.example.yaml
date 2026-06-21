@@ -43,8 +43,9 @@ emoji:
 voice:
   enabled: true
   recognize: true  # 启用语音识别
-  synthesize: false  # 禁用语音合成（暂时）
-  probability: 0.2  # 20% 概率用语音回复
+  synthesize: true  # 启用语音合成
+  reply_with_voice: false  # 是否用语音回复
+  voice_reply_probability: 0.1  # 10% 概率用语音回复
 
 # 安全配置
 security:

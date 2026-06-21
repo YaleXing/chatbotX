@@ -126,25 +126,124 @@ class VoiceProcessor:
             语音文件路径，失败返回 None
         """
         try:
-            # 构建请求
-            messages = [
-                {
-                    "role": "user",
-                    "content": f"请将以下文本转换为语音，只输出文本内容，不要添加任何其他内容：\n{text}"
-                }
-            ]
+            logger.info(f"开始语音合成，文本长度: {len(text)}")
 
-            # 调用 API 获取语音
-            # 注意：这里需要根据 MiMo 的具体 API 调整
-            # 如果 MiMo 支持直接输出语音文件，可以在这里调用
-            # 如果不支持，可以使用其他 TTS 服务
+            # 优先使用 edge-tts（免费、稳定）
+            result = await self._synthesize_with_edge_tts(text)
+            if result:
+                return result
 
-            # 暂时返回 None，表示需要使用其他 TTS 服务
-            logger.warning("语音合成功能需要根据 MiMo API 文档进一步实现")
+            # 如果 edge-tts 失败，尝试小米 MiMo API
+            result = await self._synthesize_with_mimo_tts(text)
+            if result:
+                return result
+
+            logger.error("所有 TTS 方式都失败")
             return None
 
         except Exception as e:
             logger.error(f"语音合成失败: {e}")
+            return None
+
+    async def _synthesize_with_edge_tts(self, text: str) -> Optional[str]:
+        """
+        使用 edge-tts 合成语音（免费、稳定）
+
+        Args:
+            text: 要合成的文本
+
+        Returns:
+            语音文件路径，失败返回 None
+        """
+        try:
+            import edge_tts
+            import hashlib
+
+            logger.info("使用 edge-tts 合成语音")
+
+            # 中文语音选项
+            # zh-CN-XiaoxiaoNeural - 女声（活泼）
+            # zh-CN-YunxiNeural - 男声（沉稳）
+            # zh-CN-XiaoyiNeural - 女声（温柔）
+            voice = "zh-CN-XiaoxiaoNeural"
+
+            # 生成输出文件路径
+            text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+            output_path = self.temp_dir / f"tts_{text_hash}.mp3"
+
+            # 合成语音
+            communicate = edge_tts.Communicate(text, voice)
+            await communicate.save(str(output_path))
+
+            abs_path = output_path.resolve()
+            logger.info(f"edge-tts 合成成功: {abs_path}")
+            return str(abs_path)
+
+        except Exception as e:
+            logger.warning(f"edge-tts 合成失败: {e}")
+            return None
+
+    async def _synthesize_with_mimo_tts(self, text: str) -> Optional[str]:
+        """
+        使用小米 MiMo TTS 合成语音
+
+        Args:
+            text: 要合成的文本
+
+        Returns:
+            语音文件路径，失败返回 None
+        """
+        try:
+            logger.info("尝试小米 MiMo TTS")
+
+            # 构建请求
+            payload = {
+                "model": self.tts_model,
+                "input": text,
+                "voice": "alloy",
+                "response_format": "mp3"
+            }
+
+            # 尝试多个可能的端点
+            endpoints = [
+                "/audio/speech",
+                "/v1/audio/speech",
+                "/tts",
+                "/v1/tts"
+            ]
+
+            for endpoint in endpoints:
+                logger.info(f"尝试 TTS 端点: {endpoint}")
+
+                try:
+                    response = await self.client.post(
+                        endpoint,
+                        json=payload,
+                        timeout=30.0
+                    )
+
+                    if response.status_code == 200:
+                        import hashlib
+                        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+                        output_path = self.temp_dir / f"tts_{text_hash}.mp3"
+
+                        with open(output_path, "wb") as f:
+                            f.write(response.content)
+
+                        abs_path = output_path.resolve()
+                        logger.info(f"MiMo TTS 合成成功: {abs_path}")
+                        return str(abs_path)
+                    else:
+                        logger.debug(f"端点 {endpoint} 返回: {response.status_code}")
+
+                except Exception as e:
+                    logger.debug(f"端点 {endpoint} 失败: {e}")
+                    continue
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"MiMo TTS 合成失败: {e}")
             return None
 
     async def _call_api(self, messages: list[dict]) -> Optional[str]:

@@ -4,13 +4,11 @@
 """
 
 import zipfile
-import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
 from utils.logger import logger
-from utils.helpers import sanitize_filename
 
 
 class CodeProcessor:
@@ -25,6 +23,12 @@ class CodeProcessor:
         """
         self.temp_dir = Path(temp_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # 文件保留时间（小时）- 3天
+        self.max_age_hours = 72
+
+        # 启动时清理过期文件
+        self.cleanup_temp()
 
         # 代码文件扩展名映射
         self.extension_map = {
@@ -106,8 +110,10 @@ class CodeProcessor:
                     # 写入 zip
                     zf.writestr(file_name, code)
 
-            logger.info(f"代码打包完成: {zip_path}")
-            return str(zip_path)
+            # 返回绝对路径（NapCat 需要绝对路径）
+            abs_path = zip_path.resolve()
+            logger.info(f"代码打包完成: {abs_path}")
+            return str(abs_path)
 
         except Exception as e:
             logger.error(f"代码打包失败: {e}")

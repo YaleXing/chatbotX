@@ -141,6 +141,13 @@ class MessageHandler:
             self.ai.clear_conversation(message.user_id)
             return OutgoingMessage(content="对话历史已清空~ ✨")
 
+        # 语音合成命令
+        if command == "语音":
+            if not args:
+                return OutgoingMessage(content="请指定要说的内容，如：/语音 你好呀")
+            text = " ".join(args)
+            return await self._handle_tts_command(message, text)
+
         # 默认交给 AI 处理
         return await self._handle_text_message(message)
 
@@ -220,6 +227,41 @@ class MessageHandler:
                 return OutgoingMessage(content=response + " " + face_cq)
 
         return OutgoingMessage(content=response)
+
+    async def _handle_tts_command(self, message: IncomingMessage, text: str) -> OutgoingMessage:
+        """
+        处理语音合成命令
+
+        Args:
+            message: 消息
+            text: 要转换为语音的文本
+
+        Returns:
+            回复消息
+        """
+        if not self.voice_enabled or not self.voice_processor:
+            return OutgoingMessage(content="语音合成功能未启用哦~ (｡•́︿•̀｡)")
+
+        try:
+            logger.info(f"开始语音合成: {text[:50]}...")
+
+            # 合成语音
+            voice_path = await self.voice_processor.synthesize_speech(text)
+
+            if not voice_path:
+                return OutgoingMessage(content="语音合成失败了~ (｡•́︿•̀｡)")
+
+            logger.info(f"语音合成成功: {voice_path}")
+
+            # 发送语音文件
+            return OutgoingMessage(
+                content=f"语音合成完成~ ✨",
+                files=[voice_path]
+            )
+
+        except Exception as e:
+            logger.error(f"语音合成失败: {e}")
+            return OutgoingMessage(content="语音合成出错了~ (╥﹏╥)")
 
     def _is_voice_message(self, content: str) -> bool:
         """
@@ -304,17 +346,30 @@ class MessageHandler:
         # 调用 AI 生成回复
         response = await self.ai.chat(message.user_id, message.content)
 
-        logger.info(f"AI 回复: {response[:50] if response else 'None'}...")
+        logger.info(f"AI 回复长度: {len(response) if response else 0}")
+        logger.info(f"AI 回复前100字符: {response[:100] if response else 'None'}...")
 
         # 检查回复中是否包含代码
         code_blocks = extract_code_blocks(response)
 
+        logger.info(f"检测到代码块数量: {len(code_blocks)}")
+
         if code_blocks:
+            logger.info(f"检测到 {len(code_blocks)} 个代码块，开始打包...")
+            for i, block in enumerate(code_blocks):
+                logger.info(f"代码块 {i+1}: 语言={block.get('language')}, 长度={len(block.get('code', ''))}")
             # 有代码块，打包成文件
             file_path = await self.code_processor.package_code(code_blocks)
             if file_path:
+                # 代码已打包，发送简短文本 + 文件
+                # 移除代码块，只保留说明文字
+                import re
+                short_response = re.sub(r'```.*?```', '[代码已打包为文件]', response, flags=re.DOTALL)
+                # 限制文本长度
+                if len(short_response) > 500:
+                    short_response = short_response[:500] + "..."
                 return OutgoingMessage(
-                    content=response,
+                    content=short_response,
                     files=[file_path]
                 )
 
