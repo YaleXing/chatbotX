@@ -79,10 +79,20 @@ class VoiceProcessor:
             else:
                 audio_format = "wav"  # 默认使用 wav
 
-            logger.info(f"使用 ASR 模型: {self.asr_model}，音频格式: {audio_format}")
+            # 确定 MIME 类型
+            mime_map = {
+                "wav": "audio/wav",
+                "mp3": "audio/mpeg",
+                "amr": "audio/wav"  # amr 转换后通常是 wav
+            }
+            mime_type = mime_map.get(audio_format, "audio/wav")
 
-            # 构建请求 - 使用专门的 ASR 模型
-            # MiMo ASR API 使用 input_audio 类型
+            logger.info(f"使用 ASR 模型: {self.asr_model}，音频格式: {audio_format}，MIME: {mime_type}")
+
+            # 构建请求 - 使用官方文档格式
+            # 音频数据需要是 data:{MIME_TYPE};base64,$BASE64_AUDIO 格式
+            data_url = f"data:{mime_type};base64,{audio_base64}"
+
             messages = [
                 {
                     "role": "user",
@@ -90,20 +100,15 @@ class VoiceProcessor:
                         {
                             "type": "input_audio",
                             "input_audio": {
-                                "data": audio_base64,
-                                "format": audio_format
+                                "data": data_url
                             }
-                        },
-                        {
-                            "type": "text",
-                            "text": "请识别这段语音的内容，只输出识别到的文字，不要添加任何其他内容。"
                         }
                     ]
                 }
             ]
 
-            # 调用 API
-            response = await self._call_api(messages)
+            # 调用 API（带 asr_options）
+            response = await self._call_api_with_options(messages, {"language": "zh"})
 
             if response:
                 logger.info(f"语音识别成功: {response[:50]}...")
@@ -246,25 +251,30 @@ class VoiceProcessor:
             logger.warning(f"MiMo TTS 合成失败: {e}")
             return None
 
-    async def _call_api(self, messages: list[dict]) -> Optional[str]:
+    async def _call_api_with_options(self, messages: list[dict], options: dict = None) -> Optional[str]:
         """
-        调用 API
+        调用 API（带额外选项）
 
         Args:
             messages: 消息列表
+            options: 额外选项（如 asr_options）
 
         Returns:
             AI 回复
         """
         try:
             payload = {
-                "model": self.asr_model,  # 使用 ASR 模型
+                "model": self.asr_model,
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 2048
             }
 
-            logger.info(f"调用语音识别 API，模型: {self.asr_model}")
+            # 添加额外选项
+            if options:
+                payload.update(options)
+
+            logger.info(f"调用语音识别 API，模型: {self.asr_model}，选项: {options}")
 
             response = await self.client.post(
                 "/chat/completions",
