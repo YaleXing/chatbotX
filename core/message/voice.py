@@ -3,8 +3,6 @@
 处理语音识别和语音合成
 """
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -24,11 +22,13 @@ class VoiceProcessor:
             config: 配置字典，包含：
                 - api_key: API 密钥
                 - base_url: API 基础 URL
-                - model: 模型名称
+                - asr_model: 语音识别模型
+                - tts_model: 语音合成模型
         """
         self.api_key = config.get("api_key", "")
         self.base_url = config.get("base_url", "https://api.xiaomimimo.com/v1")
-        self.model = config.get("model", "MiMo-V2.5")
+        self.asr_model = config.get("asr_model", "mimo-v2.5-asr")  # 语音识别模型
+        self.tts_model = config.get("tts_model", "mimo-v2.5-tts")  # 语音合成模型
 
         # 临时文件目录
         self.temp_dir = Path("data/temp/voice")
@@ -44,7 +44,7 @@ class VoiceProcessor:
             timeout=60.0
         )
 
-        logger.info("语音处理器初始化完成")
+        logger.info(f"语音处理器初始化完成，ASR 模型: {self.asr_model}")
 
     async def recognize_speech(self, audio_path: str) -> Optional[str]:
         """
@@ -68,16 +68,30 @@ class VoiceProcessor:
             with open(audio_path, "rb") as f:
                 audio_base64 = base64.b64encode(f.read()).decode("utf-8")
 
-            # 构建请求
+            # 获取音频格式
+            audio_format = audio_path.suffix[1:]  # 移除点号
+            if audio_format == "wav":
+                audio_format = "wav"
+            elif audio_format == "mp3":
+                audio_format = "mp3"
+            elif audio_format == "amr":
+                audio_format = "amr"
+            else:
+                audio_format = "wav"  # 默认使用 wav
+
+            logger.info(f"使用 ASR 模型: {self.asr_model}，音频格式: {audio_format}")
+
+            # 构建请求 - 使用专门的 ASR 模型
+            # MiMo ASR API 使用 input_audio 类型
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "audio",
-                            "audio": {
+                            "type": "input_audio",
+                            "input_audio": {
                                 "data": audio_base64,
-                                "format": audio_path.suffix[1:]  # 移除点号
+                                "format": audio_format
                             }
                         },
                         {
@@ -145,18 +159,25 @@ class VoiceProcessor:
         """
         try:
             payload = {
-                "model": self.model,
+                "model": self.asr_model,  # 使用 ASR 模型
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 2048
             }
+
+            logger.info(f"调用语音识别 API，模型: {self.asr_model}")
 
             response = await self.client.post(
                 "/chat/completions",
                 json=payload
             )
 
-            response.raise_for_status()
+            logger.info(f"语音识别 API 响应状态码: {response.status_code}")
+
+            if response.status_code != 200:
+                logger.error(f"语音识别 API 错误: {response.text}")
+                response.raise_for_status()
+
             data = response.json()
 
             return data["choices"][0]["message"]["content"]

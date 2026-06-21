@@ -6,14 +6,15 @@
 from typing import Optional
 from dataclasses import dataclass
 
-from core.ai.base import BaseAI, ImageContent
+from core.ai.base import BaseAI
 from core.message.emoji import EmojiManager
 from core.message.code import CodeProcessor
 from core.message.voice import VoiceProcessor
+from core.message.qq_face import get_random_face, get_face_cq
+from platforms.qq.file_helper import NapCatFileHelper
 from utils.logger import logger
 from utils.helpers import (
     is_image_message,
-    extract_image_url,
     extract_code_blocks,
     is_command,
     parse_command
@@ -73,6 +74,13 @@ class MessageHandler:
             self.voice_processor = VoiceProcessor(config.get("ai", {}))
         else:
             self.voice_processor = None
+
+        # 初始化文件帮助类
+        qq_config = config.get("qq", {})
+        self.file_helper = NapCatFileHelper(
+            api_url=qq_config.get("api_url", "http://localhost:3000"),
+            access_token=qq_config.get("access_token", "")
+        )
 
         # 表情发送概率
         self.emoji_probability = emoji_config.get("probability", 0.3)
@@ -148,28 +156,68 @@ class MessageHandler:
         """
         logger.info(f"开始处理图片消息: {message.content[:100]}...")
 
-        # 提取图片 URL
-        image_url = extract_image_url(message.content)
+        # 提取文件 ID
+        file_id = self.file_helper.extract_file_id(message.content)
 
-        if not image_url:
-            logger.warning("无法提取图片 URL")
+        if not file_id:
+            logger.warning("无法提取图片文件 ID")
             return OutgoingMessage(content="图片加载失败了~ (｡•́︿•̀｡)")
 
-        logger.info(f"提取到图片 URL: {image_url[:100]}...")
+        logger.info(f"提取到图片文件 ID: {file_id}")
 
-        # 调用 AI 识别图片
-        prompt = "请描述一下这张图片的内容，并做出有趣的回复~"
-        response = await self.ai.chat_with_image(
-            message.user_id,
-            prompt,
-            image_url
-        )
+        # 下载图片文件
+        image_path = await self.file_helper.download_image(file_id)
+
+        if not image_path:
+            logger.warning("下载图片失败")
+            return OutgoingMessage(content="图片下载失败了~ (｡•́︿•̀｡)")
+
+        logger.info(f"图片下载成功: {image_path}")
+
+        # 读取图片并转换为 base64
+        import base64
+        from pathlib import Path
+
+        try:
+            image_data = Path(image_path).read_bytes()
+            image_base64 = base64.b64encode(image_data).decode("utf-8")
+
+            # 根据文件扩展名确定 MIME 类型
+            ext = Path(image_path).suffix.lower()
+            mime_map = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp"
+            }
+            mime_type = mime_map.get(ext, "image/jpeg")
+
+            # 构建 data URL
+            image_url = f"data:{mime_type};base64,{image_base64}"
+
+            # 调用 AI 识别图片
+            prompt = "请描述一下这张图片的内容，并做出有趣的回复~"
+            response = await self.ai.chat_with_image(
+                message.user_id,
+                prompt,
+                image_url
+            )
+
+        except Exception as e:
+            logger.error(f"读取图片失败: {e}")
+            return OutgoingMessage(content="图片处理失败了~ (｡•́︿•̀｡)")
 
         # 可能添加表情
         if self._should_add_emoji():
             emoji_path = self.emoji_manager.get_random_emoji()
             if emoji_path:
                 return OutgoingMessage(content=response, images=[emoji_path])
+            else:
+                # 没有表情包时，使用 QQ 系统表情
+                face_id = get_random_face()
+                face_cq = get_face_cq(face_id)
+                return OutgoingMessage(content=response + " " + face_cq)
 
         return OutgoingMessage(content=response)
 
@@ -200,11 +248,23 @@ class MessageHandler:
             return OutgoingMessage(content="语音功能未启用哦~ (｡•́︿•̀｡)")
 
         try:
-            # 提取语音文件路径
-            voice_path = self._extract_voice_path(message.content)
+            # 提取文件 ID
+            file_id = self.file_helper.extract_file_id(message.content)
+
+            if not file_id:
+                logger.warning("无法提取语音文件 ID")
+                return OutgoingMessage(content="语音文件加载失败了~ (｡•́︿•̀｡)")
+
+            logger.info(f"提取到语音文件 ID: {file_id}")
+
+            # 下载语音文件
+            voice_path = await self.file_helper.download_record(file_id)
 
             if not voice_path:
-                return OutgoingMessage(content="语音文件加载失败了~ (｡•́︿•̀｡)")
+                logger.warning("下载语音失败")
+                return OutgoingMessage(content="语音下载失败了~ (｡•́︿•̀｡)")
+
+            logger.info(f"语音下载成功: {voice_path}")
 
             # 识别语音内容
             text = await self.voice_processor.recognize_speech(voice_path)
@@ -228,27 +288,6 @@ class MessageHandler:
         except Exception as e:
             logger.error(f"处理语音消息失败: {e}")
             return OutgoingMessage(content="语音处理出错了~ (╥﹏╥)")
-
-    def _extract_voice_path(self, content: str) -> Optional[str]:
-        """
-        从语音消息中提取文件路径
-
-        Args:
-            content: 语音消息内容
-
-        Returns:
-            语音文件路径
-        """
-        import re
-
-        # 匹配 CQ 码中的 file 字段
-        pattern = r'\[CQ:record,[^\]]*file=([^\],]+)'
-        match = re.search(pattern, content)
-
-        if match:
-            return match.group(1)
-
-        return None
 
     async def _handle_text_message(self, message: IncomingMessage) -> OutgoingMessage:
         """
@@ -284,6 +323,11 @@ class MessageHandler:
             emoji_path = self.emoji_manager.get_random_emoji()
             if emoji_path:
                 return OutgoingMessage(content=response, images=[emoji_path])
+            else:
+                # 没有表情包时，使用 QQ 系统表情
+                face_id = get_random_face()
+                face_cq = get_face_cq(face_id)
+                return OutgoingMessage(content=response + " " + face_cq)
 
         return OutgoingMessage(content=response)
 
