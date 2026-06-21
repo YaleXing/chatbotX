@@ -282,6 +282,14 @@ class ChatBot:
                     platform_msg.message_type
                 )
 
+            # 发送语音条
+            for voice_path in reply.voice_files:
+                await self.platform.send_record(
+                    platform_msg.user_id,
+                    voice_path,
+                    platform_msg.message_type
+                )
+
         except Exception as e:
             logger.error(f"发送回复失败: {e}")
 

@@ -38,12 +38,15 @@ class OutgoingMessage:
     content: str
     images: list[str] = None  # 图片路径列表
     files: list[str] = None   # 文件路径列表
+    voice_files: list[str] = None  # 语音条文件路径列表
 
     def __post_init__(self):
         if self.images is None:
             self.images = []
         if self.files is None:
             self.files = []
+        if self.voice_files is None:
+            self.voice_files = []
 
 
 class MessageHandler:
@@ -253,10 +256,10 @@ class MessageHandler:
 
             logger.info(f"语音合成成功: {voice_path}")
 
-            # 发送语音文件
+            # 发送 QQ 语音条（不是文件）
             return OutgoingMessage(
-                content=f"语音合成完成~ ✨",
-                files=[voice_path]
+                content="",  # 不发送文字，只发语音条
+                voice_files=[voice_path]
             )
 
         except Exception as e:

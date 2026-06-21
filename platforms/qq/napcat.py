@@ -208,6 +208,29 @@ class NapCatPlatform(BasePlatform):
         else:
             return await self.send_group_message(user_id, message)
 
+    async def send_record(self, user_id: str, file_path: str, message_type: str = "private") -> bool:
+        """
+        发送语音条
+
+        Args:
+            user_id: 用户 ID
+            file_path: 语音文件路径
+            message_type: 消息类型
+
+        Returns:
+            是否成功
+        """
+        # 使用 CQ 码发送语音条
+        # NapCat 会自动将 mp3/wav 转换为 silk 格式
+        message = f"[CQ:record,file=file:///{file_path}]"
+
+        logger.info(f"发送语音条: {file_path}")
+
+        if message_type == "private":
+            return await self.send_private_message(user_id, message)
+        else:
+            return await self.send_group_message(user_id, message)
+
     async def _test_connection(self):
         """测试 HTTP 连接"""
         async with self.session.get("/get_login_info") as resp:
