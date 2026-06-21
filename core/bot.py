@@ -107,7 +107,28 @@ class ChatBot:
         provider = ai_config.get("provider", "mimo")
 
         if provider == "mimo":
-            self.ai = MiMoAI(ai_config)
+            # 使用 MiMo 云端模型
+            mimo_config = ai_config.get("mimo", {})
+            mimo_config.update({
+                "max_context": ai_config.get("max_context", 100),
+                "temperature": ai_config.get("temperature", 0.7),
+                "max_tokens": ai_config.get("max_tokens", 2048)
+            })
+            self.ai = MiMoAI(mimo_config)
+            logger.info("使用 MiMo 云端模型")
+
+        elif provider == "local":
+            # 使用本地 llama.cpp 模型
+            from core.ai.local import LocalLlamaAI
+            local_config = ai_config.get("local", {})
+            local_config.update({
+                "max_context": ai_config.get("max_context", 100),
+                "temperature": ai_config.get("temperature", 0.7),
+                "max_tokens": ai_config.get("max_tokens", 2048)
+            })
+            self.ai = LocalLlamaAI(local_config)
+            logger.info("使用本地 llama.cpp 模型")
+
         else:
             raise ValueError(f"不支持的 AI 提供商: {provider}")
 
