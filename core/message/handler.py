@@ -74,7 +74,23 @@ class MessageHandler:
         voice_config = config.get("voice", {})
         self.voice_enabled = voice_config.get("enabled", False)
         if self.voice_enabled:
-            self.voice_processor = VoiceProcessor(config.get("ai", {}))
+            # 语音识别/合成需要 MiMo 的 API，从 mimo 配置中获取
+            ai_config = config.get("ai", {})
+            provider = ai_config.get("provider", "mimo")
+
+            if provider == "mimo":
+                # 使用 MiMo 云端 API
+                mimo_config = ai_config.get("mimo", {})
+                self.voice_processor = VoiceProcessor(mimo_config)
+            else:
+                # 本地模型不支持 ASR/TTS，使用 MiMo API
+                mimo_config = ai_config.get("mimo", {})
+                if mimo_config.get("api_key"):
+                    self.voice_processor = VoiceProcessor(mimo_config)
+                else:
+                    logger.warning("本地模型不支持语音识别，且未配置 MiMo API Key")
+                    self.voice_processor = None
+                    self.voice_enabled = False
         else:
             self.voice_processor = None
 
